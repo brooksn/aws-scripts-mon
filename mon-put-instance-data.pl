@@ -24,6 +24,7 @@ Description of available options:
 
   --mem-util          Reports memory utilization in percentages.
   --mem-used          Reports memory used in megabytes.
+  --mem-free          Reports free memory in megabytes.
   --mem-avail         Reports available memory in megabytes.
   --swap-util         Reports swap utilization in percentages.
   --swap-used         Reports allocated swap space in megabytes.
@@ -109,6 +110,7 @@ my $client_name = 'CloudWatch-PutInstanceData';
 my $mcount = 0;
 my $report_mem_util;
 my $report_mem_used;
+my $report_mem_free;
 my $report_mem_avail;
 my $report_swap_util;
 my $report_swap_used;
@@ -146,6 +148,7 @@ my $argv_size = @ARGV;
     'version' => \$show_version,
     'mem-util' => \$report_mem_util,
     'mem-used' => \$report_mem_used,
+    'mem-free' => \$report_mem_free,
     'mem-avail' => \$report_mem_avail,
     'swap-util' => \$report_swap_util,
     'swap-used' => \$report_swap_used,
@@ -328,7 +331,7 @@ if (!$report_disk_space && ($report_disk_util || $report_disk_used || $report_di
 }
 
 # check that there is a need to monitor at least something
-if (!$report_mem_util && !$report_mem_used && !$report_mem_avail
+if (!$report_mem_util && !$report_mem_used && !$report_mem_avail && !$report_mem_free
   && !$report_swap_util && !$report_swap_used && !$report_disk_space)
 {
   exit_with_error("No metrics specified for collection and submission to CloudWatch.");
@@ -497,7 +500,7 @@ if ($from_cron) {
 
 # collect memory and swap metrics
 
-if ($report_mem_util || $report_mem_used || $report_mem_avail || $report_swap_util || $report_swap_used)
+if ($report_mem_util || $report_mem_used || $report_mem_avail || $report_mem_free || $report_swap_util || $report_swap_used)
 {
   my %meminfo;
   foreach my $line (split('\n', `/bin/cat /proc/meminfo`)) {
@@ -511,11 +514,11 @@ if ($report_mem_util || $report_mem_used || $report_mem_avail || $report_swap_ut
   my $mem_free = $meminfo{'MemFree'} * KILO;
   my $mem_cached = $meminfo{'Cached'} * KILO;
   my $mem_buffers = $meminfo{'Buffers'} * KILO;
-  my $mem_avail = $mem_free;
+  my $mem_avail = $meminfo{'MemAvailable'} * KILO;
   if (!defined($mem_used_incl_cache_buff)) {
-     $mem_avail += $mem_cached + $mem_buffers;
+     $mem_free += $mem_cached + $mem_buffers;
   }
-  my $mem_used = $mem_total - $mem_avail;
+  my $mem_used = $mem_total - $mem_free;
   my $swap_total = $meminfo{'SwapTotal'} * KILO;
   my $swap_free = $meminfo{'SwapFree'} * KILO;  
   my $swap_used = $swap_total - $swap_free;
@@ -527,6 +530,9 @@ if ($report_mem_util || $report_mem_used || $report_mem_avail || $report_swap_ut
   }
   if ($report_mem_used) {
     add_metric('MemoryUsed', $mem_units, $mem_used / $mem_unit_div);
+  }
+  if ($report_mem_free) {
+    add_metric('MemoryFree', $mem_units, $mem_free / $mem_unit_div);
   }
   if ($report_mem_avail) {
     add_metric('MemoryAvailable', $mem_units, $mem_avail / $mem_unit_div);
